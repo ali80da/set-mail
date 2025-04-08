@@ -1,118 +1,156 @@
-# 📬 راه‌اندازی ایمیل در cPanel با Cloudflare + اتصال به Outlook
+# 📬 راه‌اندازی حرفه‌ای ایمیل در cPanel با Cloudflare + اتصال به Outlook
 
-این پروژه راهنمای کامل و مرحله‌به‌مرحله‌ای برای تنظیم ایمیل روی هاست‌های cPanel در حالتیه که DNS دامنه از طریق Cloudflare مدیریت می‌شه.
 
-🎯 هدف:
-- اتصال ایمیل به Outlook (یا سایر کلاینت‌ها) با استفاده از SMTP و IMAP/POP3
-- اطمینان از ارسال موفق ایمیل‌ها (مثلاً به Gmail)
-- جلوگیری از اسپم شدن ایمیل‌ها با تنظیم SPF / DKIM / DMARC
+
+راهنمای کامل، حرفه‌ای و گرافیکی برای تنظیم ایمیل روی هاست‌های cPanel در حالی که DNS دامنه توسط Cloudflare مدیریت می‌شود. مناسب برای اتصال به Outlook، جلوگیری از اسپم شدن و تحویل موفق ایمیل‌ها به Gmail.
 
 ---
 
-## ✅ مراحل اصلی تنظیم ایمیل
+## 🎯 اهداف این راهنما
 
-### 1. تنظیم رکوردهای DNS در Cloudflare
-
-#### 🔸 رکوردهای A و MX:
-
-| نوع رکورد | Name             | Value / IP              | Proxy |
-|-----------|------------------|--------------------------|--------|
-| A         | mail             | YOUR.SERVER.IP           | DNS only |
-| A         | cpanel           | YOUR.SERVER.IP           | DNS only |
-| A         | webmail          | YOUR.SERVER.IP           | DNS only |
-| MX        | domain.com   | mail.yourdomain.com      | DNS only |
-
-> 🛑 رکوردهای مربوط به ایمیل (mail, cpanel, webmail) حتماً باید **DNS Only (خاکستری)** باشن.
+- اتصال مطمئن ایمیل به Outlook یا سایر کلاینت‌ها با SMTP و IMAP/POP3
+- ارسال موفق ایمیل به Gmail و سایر سرویس‌دهنده‌ها
+- جلوگیری از اسپم شدن با تنظیم SPF، DKIM و DMARC
+- بررسی خطاها، مسیرها و ابزارهای تست دقیق
 
 ---
 
-### 2. تنظیم رکورد SPF
+## 🧭 مسیر جریان ارسال و دریافت ایمیل
 
-در بخش DNS یک رکورد TXT اضافه کن:
-
-```txt
-v=spf1 +a +mx ip4:YOUR.SERVER.IP ~all
-```
-مثلاً برای IP 92.126.171.80:
-```txt
-v=spf1 +a +mx ip4:93.127.181.80 ~all
+```mermaid
+graph TD
+    A[Outlook Client] -->|SMTP| B(mail.domain.com)
+    B -->|ارسال ایمیل| C[Gmail Server]
+    C -->|تحویل موفق| D[Inbox]
+    B <-->|IMAP/POP3| E[دریافت ایمیل]
 ```
 
-### 3. تنظیم رکورد DKIM
-از داخل cPanel بخش:
-```txt
-default._domainkey.yourdomain.com
+---
+
+## 🧱 ساختار رکوردهای DNS مورد نیاز
+
+```mermaid
+graph TD
+    A[Cloudflare DNS]
+    A --> B1(A: mail → IP)
+    A --> B2(A: webmail → IP)
+    A --> B3(MX: domain → mail.domain.com)
+    A --> C1(TXT: SPF)
+    A --> C2(TXT: DKIM)
+    A --> C3(TXT: DMARC)
 ```
 
-و DKIM را فعال کن
+---
 
-اگر نیاز بود، رکورد پیشنهادی TXT با نامی شبیه زیر را در Cloudflare اضافه کن:
+## 🔧 تنظیم رکوردهای DNS در Cloudflare
+
+| نوع رکورد | Name     | Value / IP            | Proxy     |
+|-----------|----------|------------------------|-----------|
+| A         | mail     | YOUR.SERVER.IP         | DNS only  |
+| A         | cpanel   | YOUR.SERVER.IP         | DNS only  |
+| A         | webmail  | YOUR.SERVER.IP         | DNS only  |
+| MX        | domain.com | mail.domain.com      | DNS only  |
+
+> ⚠️ **هشدار:** رکوردهای `mail`, `cpanel`, `webmail` نباید Proxied (ابری) باشند!
+
+---
+
+## 📄 رکورد SPF (برای تأیید فرستنده)
+
 ```txt
-default._domainkey.yourdomain.com
+v=spf1 +a +mx ip4:92.126.171.80 ~all
 ```
 
-### 4. افزودن رکورد DMARC (اختیاری ولی مهم)
-در بخش DNS رکورد زیر را اضافه کن:
+> 💡 **نکته:** جایگزین هر رکورد قبلی SPF مربوط به Cloudflare Email Routing بشود.
+
+---
+
+## 🔐 فعال‌سازی DKIM
+
+از مسیر زیر در cPanel:
+```
+Email > Email Deliverability
+```
+- روی **Repair** بزن یا رکورد پیشنهادی `default._domainkey` را کپی و در Cloudflare اضافه کن.
+
+---
+
+## 🛡️ رکورد DMARC (اختیاری ولی مهم)
+
 ```txt
 Name: _dmarc
 Type: TXT
 Value: v=DMARC1; p=none; sp=none; adkim=r; aspf=r;
-
 ```
-بعد از تست موفق، می‌تونی p=none را به p=reject تغییر بدی.
 
+> ✅ پس از تست موفق می‌تونی `p=reject` برای جلوگیری از جعل استفاده کنی.
 
-📄 بخش کامل تنظیمات + خطاها + ابزار تست + نمونه رکوردها (قابل کپی مستقیم)
-## 5. تنظیمات Outlook یا سایر کلاینت‌های ایمیل
+---
 
-| تنظیم              | مقدار                          |
-|-------------------|---------------------------------|
-| Email             | test@domain.com              |
-| Username          | test@domain.com              |
-| Password          | رمز عبور ایمیل                  |
-| Incoming Server   | mail.domain.com             |
-| Incoming Port     | 993 (IMAP) / 995 (POP3)         |
-| Outgoing Server   | mail.domain.com             |
-| Outgoing Port     | 465 (SSL) یا 587 (TLS)          |
-| Encryption        | SSL/TLS                         |
-| Auth Required     | Yes                             |
+## 💻 تنظیمات Outlook یا سایر کلاینت‌ها
+
+| تنظیم             | مقدار                          |
+|------------------|---------------------------------|
+| Email            | test@domain.com                 |
+| Username         | test@domain.com                 |
+| Password         | رمز عبور ایمیل                  |
+| Incoming Server  | mail.domain.com                 |
+| Incoming Port    | 993 (IMAP) / 995 (POP3)         |
+| Outgoing Server  | mail.domain.com                 |
+| Outgoing Port    | 465 (SSL) یا 587 (TLS)          |
+| Encryption       | SSL/TLS                         |
+| Auth Required    | Yes                             |
 
 ---
 
 ## 🚫 خطاهای رایج و راه‌حل‌ها
 
-### 🔻 ایمیل ارسال نمی‌شود ولی دریافت انجام می‌شود:
+> ❌ **ارسال ایمیل انجام نمی‌شود اما دریافت کار می‌کند؟**
 
-- رکورد `mail` در Cloudflare ابری (Proxied) است ← باید **DNS Only (خاکستری)** شود.
-- رکورد SPF یا DKIM تنظیم نشده یا اشتباه است.
-- IP خروجی SMTP در SPF تعریف نشده.
-- Gmail ایمیل را Reject می‌کند چون فرستنده تأیید نشده است:
+- رکورد `mail` در Cloudflare به اشتباه روی Proxied است ← باید DNS Only شود
+- SPF یا DKIM تنظیم نشده یا اشتباه است
+- IP سرور SMTP در SPF تعریف نشده
+- Gmail می‌گوید:
 
+```
+550-5.7.26 Gmail requires all senders to authenticate with either SPF or DKIM.
+```
 
+---
 
+## ✍️ نمونه رکوردهای پیشنهادی (کامل)
 
-<br>
+```txt
+# ✅ SPF
+v=spf1 +a +mx ip4:92.126.171.80 ~all
+
+# ✅ DKIM
+default._domainkey.domain.com  (از cPanel دریافت شود)
+
+# ✅ DMARC
+v=DMARC1; p=none; sp=none; adkim=r; aspf=r;
+```
+
+---
 
 
 ## 💡 نکات تکمیلی
-همیشه از IP صحیح سرورت در رکورد SPF استفاده کن.
 
-برای تست اولیه از p=none در DMARC استفاده کن.
+- از IP صحیح هاست در SPF استفاده کن
+- رکورد `mail` باید خاکستری (DNS Only) باشد
+- ابتدا از `p=none` در DMARC استفاده کن، سپس `reject`
+- تست ایمیل قبل از استفاده در تولید بسیار مهم است
 
-بعد از اطمینان، سیاست‌های قوی‌تر مثل p=quarantine یا p=reject استفاده کن.
+---
 
-رکورد mail باید همیشه خاکستری (DNS Only) باشه، نه نارنجی (Proxied)!
+## 🧠 نویسنده : Ali Darehshori
 
-<br>
+تهیه‌شده با تجربه عملی در راه‌اندازی ایمیل روی cPanel پشت Cloudflare با اتصال کامل به Outlook و Gmail.
 
-## 🧠 نویسنده
-####📎 تهیه شده بر اساس تجربه واقعی از راه‌اندازی و عیب‌یابی ایمیل در هاست‌های cPanel پشت Cloudflare، مخصوص اتصال به Outlook و تحویل ایمیل به Gmail.
-
-اگر این راهنما به کارت اومد، خوشحال می‌شم ستاره بزنی ⭐ یا فورکش کنی 🙌
-
+> #### اگر مفید بود، ⭐ بده و با دیگران به اشتراک بذار 🙌
 
 
 
+## 📎 لایسنس
 
-📎 لایسنس
-استفاده آزاد، با ذکر منبع ❤️
+[A License – استفاده آزاد با من](https://github.com/ali80da/a-license) ❤️
